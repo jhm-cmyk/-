@@ -24,6 +24,7 @@ const dbRef = ref(database, 'noorHusseinDB');
 // ==========================================
 const ADMIN_PIN = "1972";
 const DELETE_PIN = "121";
+const DEBT_LIMIT_ALERT = 500000; // (ميزة 5: حد التنبيه للدين)
 let db = JSON.parse(localStorage.getItem('noorHusseinDB')) || { customers: [] };
 let activeCustomer = null;
 let currentCart = [];
@@ -35,13 +36,19 @@ let targetCustomerId = null;
 document.addEventListener("DOMContentLoaded", () => {
     initApp();
     setupFirebaseSync();
+    
+    // (ميزة 4: استرجاع السلة المحفوظة مؤقتاً عند تحديث الصفحة)
+    const savedCart = localStorage.getItem('tempCartBackup');
+    if (savedCart) {
+        currentCart = JSON.parse(savedCart);
+        renderCart();
+    }
 });
 
 function initApp() {
     hideAllScreens();
     
-    // --- إصلاح الخطأ: استخراج المعرف بذكاء ---
-    // هذا الكود يبحث عن id=... في أي مكان في الرابط (سواء قبل # أو بعدها)
+    // استخراج المعرف بذكاء
     let linkedId = null;
     const fullUrl = window.location.href;
     const match = fullUrl.match(/[?&]id=([^&#]*)/);
@@ -52,19 +59,16 @@ function initApp() {
 
     if (linkedId) {
         targetCustomerId = parseInt(linkedId);
-        // التحقق المحلي السريع
         const customer = db.customers.find(c => c.id === targetCustomerId);
         if (customer) {
             document.getElementById('client-welcome-name').innerText = customer.name;
             showScreen('screen-client-login');
             hideSplash();
         } else {
-            // ننتظر التحميل من السيرفر
             const splash = document.getElementById('splash-screen');
             if(splash) splash.style.display = 'flex';
         }
     } else {
-        // مسار الأدمن
         showScreen('screen-admin-login');
         hideSplash();
     }
@@ -97,7 +101,6 @@ function setupFirebaseSync() {
                     if (splash && splash.style.display !== 'none') {
                          setTimeout(() => {
                              alert('الرابط غير صالح أو تم حذف الحساب.');
-                             // إعادة توجيه للرئيسية بدون بارامترات لتجنب التكرار
                              window.location.href = window.location.pathname; 
                          }, 2000);
                     }
@@ -245,7 +248,19 @@ function renderCustomerList(filterText = '') {
     calculateGlobalDebt();
     const list = document.getElementById('customerListContainer');
     list.innerHTML = '';
-    const filtered = db.customers.filter(c => c.name.includes(filterText));
+    
+    // (ميزة 2: ترتيب الزبائن بحيث يظهر صاحب الدين الأعلى أولاً)
+    db.customers.sort((a, b) => {
+        const debtA = a.totalSales - a.totalPaid;
+        const debtB = b.totalSales - b.totalPaid;
+        return debtB - debtA; // تنازلي
+    });
+
+    // (ميزة 1: البحث بالاسم أو برقم الهاتف)
+    const filtered = db.customers.filter(c => 
+        c.name.includes(filterText) || (c.phone && c.phone.includes(filterText))
+    );
+
     filtered.forEach(c => {
         const debt = c.totalSales - c.totalPaid;
         const div = document.createElement('div');
@@ -262,10 +277,16 @@ function selectCustomer(id) {
     activeCustomer = db.customers.find(c => c.id === id);
     document.getElementById('headerCustomerName').innerText = activeCustomer.name;
     
-    // --- إصلاح: توليد رابط نظيف بدون علامة # ---
+    // توليد رابط نظيف
     const baseUrl = window.location.href.split('?')[0].split('#')[0];
     document.getElementById('customerShareLink').value = `${baseUrl}?id=${activeCustomer.id}`;
     
+    // (ميزة 5: تنبيه إذا كان الدين مرتفع جداً)
+    const currentDebt = activeCustomer.totalSales - activeCustomer.totalPaid;
+    if (currentDebt > DEBT_LIMIT_ALERT) {
+        alert(`⚠️ تنبيه: ديون هذا الزبون مرتفعة (${currentDebt.toLocaleString()})`);
+    }
+
     refreshAdminViews();
     switchTab('tab-invoice');
 }
@@ -305,9 +326,19 @@ function addItemToCart() {
     
     if (!name || !price) return alert("الرجاء إدخال المادة والسعر");
     
-    currentCart.push({ name, price, qty, total: price * qty });
+    // (ميزة 3: دمج المواد المتشابهة في السلة بدلاً من تكرار الأسطر)
+    const existingItem = currentCart.find(item => item.name === name && item.price === price);
+    
+    if (existingItem) {
+        existingItem.qty += qty;
+        existingItem.total = existingItem.qty * existingItem.price;
+    } else {
+        currentCart.push({ name, price, qty, total: price * qty });
+    }
+
     document.getElementById('itemName').value = '';
     document.getElementById('itemName').focus();
+    
     renderCart();
 }
 
@@ -320,8 +351,15 @@ function renderCart() {
         tbody.innerHTML += `<tr><td>${item.name}</td><td>${item.price}</td><td>${item.qty}</td><td onclick="removeFromCart(${idx})" style="color:red; cursor:pointer; font-weight:bold;">X</td></tr>`;
     });
     document.getElementById('cartTotal').innerText = total.toLocaleString();
+
+    // (ميزة 4: حفظ السلة مؤقتاً لتفادي ضياع البيانات)
+    localStorage.setItem('tempCartBackup', JSON.stringify(currentCart));
 }
-function removeFromCart(idx) { currentCart.splice(idx, 1); renderCart(); }
+
+function removeFromCart(idx) { 
+    currentCart.splice(idx, 1); 
+    renderCart(); 
+}
 
 function saveInvoice() {
     if (!activeCustomer) return alert("خطأ: لم يتم تحديد زبون، يرجى العودة للقائمة واختيار الزبون.");
@@ -343,7 +381,7 @@ function saveInvoice() {
     
     saveData();
     currentCart = [];
-    renderCart();
+    renderCart(); // سيقوم أيضاً بمسح النسخة الاحتياطية لأن المصفوفة أصبحت فارغة
     
     alert('تم الحفظ بنجاح');
     switchTab('tab-reports');
