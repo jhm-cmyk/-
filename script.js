@@ -39,8 +39,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function initApp() {
     hideAllScreens();
-    const urlParams = new URLSearchParams(window.location.search);
-    const linkedId = urlParams.get('id');
+    
+    // --- إصلاح الخطأ: استخراج المعرف بذكاء ---
+    // هذا الكود يبحث عن id=... في أي مكان في الرابط (سواء قبل # أو بعدها)
+    let linkedId = null;
+    const fullUrl = window.location.href;
+    const match = fullUrl.match(/[?&]id=([^&#]*)/);
+    
+    if (match && match[1]) {
+        linkedId = match[1];
+    }
 
     if (linkedId) {
         targetCustomerId = parseInt(linkedId);
@@ -85,13 +93,12 @@ function setupFirebaseSync() {
                     showScreen('screen-client-login');
                     hideSplash();
                 } else {
-                    // إذا لم يتم العثور عليه حتى بعد التحديث
                     const splash = document.getElementById('splash-screen');
-                    // لا نخفي الشاشة فوراً، ننتظر قليلاً للتأكد
                     if (splash && splash.style.display !== 'none') {
                          setTimeout(() => {
                              alert('الرابط غير صالح أو تم حذف الحساب.');
-                             window.location.href = window.location.pathname; // إعادة توجيه للرئيسية
+                             // إعادة توجيه للرئيسية بدون بارامترات لتجنب التكرار
+                             window.location.href = window.location.pathname; 
                          }, 2000);
                     }
                 }
@@ -195,7 +202,7 @@ function switchTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.getElementById(tabId).classList.add('active');
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    // محاولة تفعيل الزر في النافبار
+    
     const navBtn = document.querySelector(`a[onclick="switchTab('${tabId}')"]`);
     if(navBtn) navBtn.classList.add('active');
 }
@@ -254,8 +261,11 @@ function filterCustomers() { renderCustomerList(document.getElementById('custome
 function selectCustomer(id) {
     activeCustomer = db.customers.find(c => c.id === id);
     document.getElementById('headerCustomerName').innerText = activeCustomer.name;
-    const baseUrl = window.location.href.split('?')[0];
+    
+    // --- إصلاح: توليد رابط نظيف بدون علامة # ---
+    const baseUrl = window.location.href.split('?')[0].split('#')[0];
     document.getElementById('customerShareLink').value = `${baseUrl}?id=${activeCustomer.id}`;
+    
     refreshAdminViews();
     switchTab('tab-invoice');
 }
@@ -314,12 +324,10 @@ function renderCart() {
 function removeFromCart(idx) { currentCart.splice(idx, 1); renderCart(); }
 
 function saveInvoice() {
-    // إصلاح مشكلة عدم الاستجابة: التحقق من وجود الزبون
     if (!activeCustomer) return alert("خطأ: لم يتم تحديد زبون، يرجى العودة للقائمة واختيار الزبون.");
     
     if (!currentCart || currentCart.length === 0) return alert('السلة فارغة!');
 
-    // ضمان وجود المصفوفة والقيم
     if (!activeCustomer.transactions) activeCustomer.transactions = [];
     if (typeof activeCustomer.totalSales !== 'number') activeCustomer.totalSales = 0;
 
@@ -412,7 +420,7 @@ function calculateGlobalDebt() {
 }
 
 // ==========================================
-// ربط الدوال بالنافذة (مهم جداً)
+// ربط الدوال بالنافذة
 // ==========================================
 window.checkAdminLogin = checkAdminLogin;
 window.checkClientLogin = checkClientLogin;
