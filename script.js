@@ -24,7 +24,7 @@ const dbRef = ref(database, 'noorHusseinDB');
 // ==========================================
 const ADMIN_PIN = "1972";
 const DELETE_PIN = "121";
-const DEBT_LIMIT_ALERT = 500000; // (ميزة 5: حد التنبيه للدين)
+const DEBT_LIMIT_ALERT = 500000;
 let db = JSON.parse(localStorage.getItem('noorHusseinDB')) || { customers: [] };
 let activeCustomer = null;
 let currentCart = [];
@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initApp();
     setupFirebaseSync();
     
-    // (ميزة 4: استرجاع السلة المحفوظة مؤقتاً عند تحديث الصفحة)
+    // استرجاع السلة المحفوظة مؤقتاً
     const savedCart = localStorage.getItem('tempCartBackup');
     if (savedCart) {
         currentCart = JSON.parse(savedCart);
@@ -48,7 +48,6 @@ document.addEventListener("DOMContentLoaded", () => {
 function initApp() {
     hideAllScreens();
     
-    // استخراج المعرف بذكاء
     let linkedId = null;
     const fullUrl = window.location.href;
     const match = fullUrl.match(/[?&]id=([^&#]*)/);
@@ -162,7 +161,11 @@ function fillClientViewData(c) {
     [...transactions].reverse().forEach(t => {
         let details = '';
         if (t.type === 'sale') {
-            details = `<div style="font-size:11px; color:#666; margin-top:4px;">${t.items.map(i => i.name).join(' + ')}</div>`;
+            // --- تعديل: إظهار العدد إذا كان أكبر من 1 ---
+            const itemsText = t.items.map(i => {
+                return i.qty > 1 ? `${i.name} (${i.qty})` : i.name;
+            }).join(' + ');
+            details = `<div style="font-size:11px; color:#666; margin-top:4px;">${itemsText}</div>`;
         }
         list.innerHTML += `
             <div style="background:white; padding:12px; border-bottom:1px solid #eee; margin-bottom:5px;">
@@ -249,14 +252,12 @@ function renderCustomerList(filterText = '') {
     const list = document.getElementById('customerListContainer');
     list.innerHTML = '';
     
-    // (ميزة 2: ترتيب الزبائن بحيث يظهر صاحب الدين الأعلى أولاً)
     db.customers.sort((a, b) => {
         const debtA = a.totalSales - a.totalPaid;
         const debtB = b.totalSales - b.totalPaid;
-        return debtB - debtA; // تنازلي
+        return debtB - debtA;
     });
 
-    // (ميزة 1: البحث بالاسم أو برقم الهاتف)
     const filtered = db.customers.filter(c => 
         c.name.includes(filterText) || (c.phone && c.phone.includes(filterText))
     );
@@ -277,11 +278,9 @@ function selectCustomer(id) {
     activeCustomer = db.customers.find(c => c.id === id);
     document.getElementById('headerCustomerName').innerText = activeCustomer.name;
     
-    // توليد رابط نظيف
     const baseUrl = window.location.href.split('?')[0].split('#')[0];
     document.getElementById('customerShareLink').value = `${baseUrl}?id=${activeCustomer.id}`;
     
-    // (ميزة 5: تنبيه إذا كان الدين مرتفع جداً)
     const currentDebt = activeCustomer.totalSales - activeCustomer.totalPaid;
     if (currentDebt > DEBT_LIMIT_ALERT) {
         alert(`⚠️ تنبيه: ديون هذا الزبون مرتفعة (${currentDebt.toLocaleString()})`);
@@ -326,7 +325,6 @@ function addItemToCart() {
     
     if (!name || !price) return alert("الرجاء إدخال المادة والسعر");
     
-    // (ميزة 3: دمج المواد المتشابهة في السلة بدلاً من تكرار الأسطر)
     const existingItem = currentCart.find(item => item.name === name && item.price === price);
     
     if (existingItem) {
@@ -352,7 +350,6 @@ function renderCart() {
     });
     document.getElementById('cartTotal').innerText = total.toLocaleString();
 
-    // (ميزة 4: حفظ السلة مؤقتاً لتفادي ضياع البيانات)
     localStorage.setItem('tempCartBackup', JSON.stringify(currentCart));
 }
 
@@ -381,7 +378,7 @@ function saveInvoice() {
     
     saveData();
     currentCart = [];
-    renderCart(); // سيقوم أيضاً بمسح النسخة الاحتياطية لأن المصفوفة أصبحت فارغة
+    renderCart();
     
     alert('تم الحفظ بنجاح');
     switchTab('tab-reports');
@@ -428,7 +425,11 @@ function refreshAdminViews() {
     [...transactions].reverse().forEach(t => {
         let details = '';
         if (t.type === 'sale') {
-            details = `<div style="font-size:11px; color:#666;">${t.items.map(i => i.name).join(' + ')}</div>`;
+            // --- تعديل: إظهار العدد إذا كان أكبر من 1 ---
+            const itemsText = t.items.map(i => {
+                return i.qty > 1 ? `${i.name} (${i.qty})` : i.name;
+            }).join(' + ');
+            details = `<div style="font-size:11px; color:#666;">${itemsText}</div>`;
         }
         list.innerHTML += `
             <div style="background:white; padding:10px; border-bottom:1px solid #eee; margin-bottom:5px;">
