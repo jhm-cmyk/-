@@ -176,6 +176,11 @@ td { padding: 10px; border-bottom: 1px solid #eee; text-align: center; }
     {
         display: none !important;
     }
+    
+    /* إخفاء أزرار الحذف والتعديل عند الطباعة */
+    .trans-actions {
+        display: none !important;
+    }
 
     /* تنسيق الهيدر للطباعة */
     .app-header {
