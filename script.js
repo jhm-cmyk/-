@@ -160,8 +160,7 @@ function fillClientViewData(c) {
     
     [...transactions].reverse().forEach(t => {
         let details = '';
-        if (t.type === 'sale') {
-            // --- تعديل: إظهار العدد إذا كان أكبر من 1 ---
+        if (t.type === 'sale' && t.items) {
             const itemsText = t.items.map(i => {
                 return i.qty > 1 ? `${i.name} (${i.qty})` : i.name;
             }).join(' + ');
@@ -245,6 +244,37 @@ function confirmAddCustomer() {
     document.getElementById('newCPass').value = '';
     closeAddCustomerModal();
     selectCustomer(newC.id);
+}
+
+// === ميزات تعديل الزبون الجديدة ===
+function openEditCustomerModal() {
+    if (!activeCustomer) return;
+    document.getElementById('editCName').value = activeCustomer.name;
+    document.getElementById('editCPhone').value = activeCustomer.phone || '';
+    document.getElementById('editCPass').value = activeCustomer.password;
+    document.getElementById('editCustomerModal').style.display = 'block';
+}
+
+function closeEditCustomerModal() { document.getElementById('editCustomerModal').style.display = 'none'; }
+
+function confirmEditCustomer() {
+    if (!activeCustomer) return;
+    const name = document.getElementById('editCName').value;
+    const pass = document.getElementById('editCPass').value;
+    const phone = document.getElementById('editCPhone').value;
+
+    if (!name || !pass) return alert("الاسم وكلمة المرور مطلوبان");
+
+    activeCustomer.name = name;
+    activeCustomer.password = pass;
+    activeCustomer.phone = phone;
+
+    document.getElementById('headerCustomerName').innerText = name;
+    saveData();
+    closeEditCustomerModal();
+    renderCustomerList();
+    refreshAdminViews();
+    alert("تم تعديل بيانات الزبون بنجاح");
 }
 
 function renderCustomerList(filterText = '') {
@@ -409,6 +439,7 @@ function processPayment() {
     calculateGlobalDebt();
 }
 
+// === إدارة تعديل وحذف الحركات ===
 function refreshAdminViews() {
     if (!activeCustomer) return;
     const currentDebt = activeCustomer.totalSales - activeCustomer.totalPaid;
@@ -422,26 +453,91 @@ function refreshAdminViews() {
     
     const transactions = activeCustomer.transactions || [];
 
-    [...transactions].reverse().forEach(t => {
+    // نستخدم map لحفظ الفهرس الأصلي قبل العكس
+    const indexedTrans = transactions.map((t, i) => ({ ...t, originalIndex: i }));
+
+    [...indexedTrans].reverse().forEach(t => {
         let details = '';
-        if (t.type === 'sale') {
-            // --- تعديل: إظهار العدد إذا كان أكبر من 1 ---
+        if (t.type === 'sale' && t.items) {
             const itemsText = t.items.map(i => {
                 return i.qty > 1 ? `${i.name} (${i.qty})` : i.name;
             }).join(' + ');
             details = `<div style="font-size:11px; color:#666;">${itemsText}</div>`;
         }
+        
+        // أزرار التعديل والحذف
+        const actions = `
+            <div class="trans-actions" style="display:flex; gap:15px; margin-top:5px;">
+                <i class="fas fa-pen" onclick="openEditTransactionModal(${t.originalIndex})" style="color:#f39c12; cursor:pointer;"></i>
+                <i class="fas fa-trash" onclick="deleteTransaction(${t.originalIndex})" style="color:#c0392b; cursor:pointer;"></i>
+            </div>
+        `;
+
         list.innerHTML += `
             <div style="background:white; padding:10px; border-bottom:1px solid #eee; margin-bottom:5px;">
                 <div style="display:flex; justify-content:space-between; color:${t.type === 'sale' ? 'red' : 'green'}">
                     <strong>${t.type === 'sale' ? 'فاتورة' : 'تسديد'}</strong>
                     <span>${t.amount.toLocaleString()}</span>
                 </div>
-                <small style="color:#aaa;">${t.date}</small>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <small style="color:#aaa;">${t.date}</small>
+                    ${actions}
+                </div>
                 ${details}
             </div>
         `;
     });
+}
+
+function deleteTransaction(index) {
+    if (confirm("هل أنت متأكد من حذف هذه الحركة؟ سيتم إعادة حساب الدين.")) {
+        activeCustomer.transactions.splice(index, 1);
+        recalcCustomerTotals();
+        saveData();
+        refreshAdminViews();
+        alert("تم الحذف.");
+    }
+}
+
+function openEditTransactionModal(index) {
+    const t = activeCustomer.transactions[index];
+    document.getElementById('editTransIndex').value = index;
+    document.getElementById('editTransAmount').value = t.amount;
+    document.getElementById('editTransactionModal').style.display = 'block';
+}
+
+function closeEditTransactionModal() { document.getElementById('editTransactionModal').style.display = 'none'; }
+
+function confirmEditTransaction() {
+    const idx = document.getElementById('editTransIndex').value;
+    const amount = parseFloat(document.getElementById('editTransAmount').value);
+    
+    if (!amount) return alert("أدخل مبلغ صحيح");
+    
+    activeCustomer.transactions[idx].amount = amount;
+    
+    // إذا كانت فاتورة يجب تعديل مجموع العناصر أيضاً ليتطابق مع المبلغ الجديد (اختياري، هنا نعدل المبلغ النهائي فقط)
+    // إذا كنت تريد الدقة التامة يجب تعديل أسعار المواد، لكن هنا سنكتفي بتعديل إجمالي الحركة للسرعة
+    
+    recalcCustomerTotals();
+    saveData();
+    closeEditTransactionModal();
+    refreshAdminViews();
+    alert("تم التعديل.");
+}
+
+function recalcCustomerTotals() {
+    if (!activeCustomer) return;
+    let sales = 0;
+    let paid = 0;
+    
+    activeCustomer.transactions.forEach(t => {
+        if (t.type === 'sale') sales += t.amount;
+        if (t.type === 'pay') paid += t.amount;
+    });
+    
+    activeCustomer.totalSales = sales;
+    activeCustomer.totalPaid = paid;
 }
 
 // --- دالة الحفظ المركزية ---
@@ -476,3 +572,12 @@ window.addItemToCart = addItemToCart;
 window.removeFromCart = removeFromCart;
 window.saveInvoice = saveInvoice;
 window.processPayment = processPayment;
+
+// دوال التعديل الجديدة
+window.openEditCustomerModal = openEditCustomerModal;
+window.closeEditCustomerModal = closeEditCustomerModal;
+window.confirmEditCustomer = confirmEditCustomer;
+window.deleteTransaction = deleteTransaction;
+window.openEditTransactionModal = openEditTransactionModal;
+window.closeEditTransactionModal = closeEditTransactionModal;
+window.confirmEditTransaction = confirmEditTransaction;
