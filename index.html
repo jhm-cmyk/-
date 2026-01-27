@@ -114,8 +114,12 @@
             <div id="tab-reports" class="tab-content">
                 <div class="section-title">إعدادات الزبون</div>
                 
-                <button onclick="printCustomerReport()" class="btn-info" style="margin-bottom:15px; width:100%;">
+                <button onclick="printCustomerReport()" class="btn-info" style="margin-bottom:10px; width:100%;">
                     طباعة كشف حساب <i class="fas fa-print"></i>
+                </button>
+
+                <button onclick="openEditCustomerModal()" class="btn-info" style="margin-bottom:15px; width:100%; background-color:#f39c12;">
+                    تعديل بيانات الزبون <i class="fas fa-pen"></i>
                 </button>
 
                 <div class="link-share-box">
@@ -160,6 +164,29 @@
                 <button onclick="confirmAddCustomer()" class="btn-primary">حفظ</button>
             </div>
         </div>
+
+        <div id="editCustomerModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeEditCustomerModal()">&times;</span>
+                <h3>تعديل بيانات الزبون</h3>
+                <input type="text" id="editCName" placeholder="الاسم الجديد" autocomplete="off">
+                <input type="text" id="editCPhone" placeholder="الهاتف الجديد" autocomplete="off">
+                <input type="text" id="editCPass" placeholder="كلمة المرور الجديدة" autocomplete="off">
+                <button onclick="confirmEditCustomer()" class="btn-save">حفظ التعديلات</button>
+            </div>
+        </div>
+
+        <div id="editTransactionModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeEditTransactionModal()">&times;</span>
+                <h3>تعديل الحركة</h3>
+                <input type="hidden" id="editTransIndex">
+                <label style="display:block; text-align:right; margin-bottom:5px;">المبلغ:</label>
+                <input type="number" id="editTransAmount" placeholder="المبلغ" autocomplete="off">
+                <button onclick="confirmEditTransaction()" class="btn-save">حفظ التعديل</button>
+            </div>
+        </div>
+
     </section>
 
     <script type="module" src="script.js"></script>
